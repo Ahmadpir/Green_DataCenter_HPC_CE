@@ -1,0 +1,7 @@
+numpy>=2.0
+pandas>=2.2
+matplotlib>=3.8
+pyyaml>=6.0
+# only for building the Word and PowerPoint versions of the article (word/):
+python-docx>=1.1
+python-pptx>=1.0

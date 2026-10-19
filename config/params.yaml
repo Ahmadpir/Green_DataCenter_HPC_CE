@@ -1,0 +1,100 @@
+# All parameters of the study. Every value is either taken from a cited public source
+# (field "source") or explicitly labelled ASSUMPTION. Sensitivity ranges are in "sensitivity".
+study:
+  year: 2025                 # last complete calendar year with full public data
+  home_region: DE            # users' nearest cloud region in the base case (ASSUMPTION)
+  fleet_avg_it_mw: 1.0       # average IT load of the hypothetical CE back-end (ASSUMPTION; results scale linearly)
+  forecast: persistence      # 'persistence' (same hour, previous day) or 'oracle' (perfect foresight)
+  migration_overhead: 0.05   # extra energy fraction when a job runs outside its home region (ASSUMPTION)
+  headroom_factor: 1.5       # max flexible load one region can absorb in an hour, as multiple of fleet avg flexible load (ASSUMPTION)
+
+# PUE: Google per-campus trailing-twelve-month PUE for Q4 2025,
+#   https://www.google.com/about/datacenters/efficiency/ (accessed 2026-10-18).
+# Regions without a published campus PUE use the Uptime Institute 2025 global survey average (1.54),
+#   as quoted on the same Google page (ASSUMPTION that a CE vendor uses a typical colocation site there).
+regions:
+  - {code: IE, name: "Ireland (Dublin)",          energy_charts_country: ie, pue: 1.08, pue_source: "Google TTM Q4-2025, Dublin"}
+  - {code: UK, name: "United Kingdom (London)",   energy_charts_country: uk, ci_source: neso, pue: 1.54, pue_source: "Uptime 2025 avg (assumed colocation)"}
+    # UK: Energy-Charts lists only oil, gas, onshore wind and 'others' for the UK (no nuclear, coal, solar,
+    # offshore wind or biomass), so the GB series is taken directly from the NESO Carbon Intensity API instead.
+  - {code: NL, name: "Netherlands (Eemshaven)",   energy_charts_country: nl, pue: 1.07, pue_source: "Google TTM Q4-2025, Eemshaven"}
+  - {code: BE, name: "Belgium (St. Ghislain)",    energy_charts_country: be, pue: 1.08, pue_source: "Google TTM Q4-2025, St. Ghislain"}
+  - {code: DK, name: "Denmark (Fredericia)",      energy_charts_country: dk, pue: 1.07, pue_source: "Google TTM Q4-2025, Fredericia"}
+  - {code: FI, name: "Finland (Hamina)",          energy_charts_country: fi, pue: 1.10, pue_source: "Google TTM Q4-2025, Hamina"}
+  - {code: DE, name: "Germany (Frankfurt)",       energy_charts_country: de, pue: 1.54, pue_source: "Uptime 2025 avg (assumed colocation)"}
+  - {code: FR, name: "France (Paris)",            energy_charts_country: fr, pue: 1.54, pue_source: "Uptime 2025 avg (assumed colocation)"}
+  - {code: PL, name: "Poland (Warsaw)",           energy_charts_country: pl, pue: 1.54, pue_source: "Uptime 2025 avg (assumed colocation)"}
+
+# Life-cycle emission factors, gCO2eq/kWh. Median (and min/max for sensitivity) from
+# IPCC AR5 WGIII Annex III, Table A.III.2 (Schloemer et al., 2014). Types without an AR5 entry are ASSUMPTION.
+emission_factors:
+  "Fossil brown coal / lignite": {med: 820, min: 740, max: 910}
+  "Fossil hard coal":            {med: 820, min: 740, max: 910}
+  "Fossil coal-derived gas":     {med: 820, min: 740, max: 910}   # ASSUMPTION: treated as coal
+  "Fossil gas":                  {med: 490, min: 410, max: 650}
+  "Fossil oil":                  {med: 650, min: 490, max: 910}   # ASSUMPTION: no AR5 entry; between gas and coal
+  "Fossil peat":                 {med: 820, min: 740, max: 910}   # ASSUMPTION: treated as coal
+  "Biomass":                     {med: 230, min: 130, max: 420}
+  "Waste":                       {med: 490, min: 230, max: 820}   # ASSUMPTION
+  "Others":                      {med: 490, min: 230, max: 820}   # ASSUMPTION
+  "Other renewables":            {med: 38,  min: 6,   max: 79}    # ASSUMPTION: geothermal value
+  "Geothermal":                  {med: 38,  min: 6,   max: 79}
+  "Nuclear":                     {med: 12,  min: 3.7, max: 110}
+  "Hydro Run-of-River":          {med: 24,  min: 1,   max: 2200}
+  "Hydro water reservoir":       {med: 24,  min: 1,   max: 2200}
+  "Hydro pumped storage":        {med: 0,   min: 0,   max: 0}     # ASSUMPTION: storage output, excluded to avoid double counting
+  "Wind onshore":                {med: 11,  min: 7,   max: 56}
+  "Wind offshore":               {med: 12,  min: 8,   max: 35}
+  "Solar":                       {med: 48,  min: 18,  max: 180}
+# Storage discharge, excluded to avoid double counting (ASSUMPTION):
+storage_types: ["Hydro pumped storage", "Battery"]
+# Series in the Energy-Charts response that are not generation (ignored):
+non_generation: ["Load", "Residual load", "Renewable share of load", "Renewable share of generation",
+                 "Cross border electricity trading", "Hydro pumped storage consumption", "Battery Consumption", "Load (incl. self-consumption)"]
+
+# Workload taxonomy for a consumer-electronics (CE) cloud back-end. ALL values are ASSUMPTIONS chosen
+# to be plausible and are varied in the sensitivity analysis; the carbon results are reported as
+# percentages, which depend on window/duration/flexibility but not on the absolute load.
+workloads:
+  voice:
+    label: "Voice-assistant serving"
+    share: 0.35          # fraction of fleet IT energy
+    window_h: 0          # non-deferrable (interactive, latency-bound)
+    duration_h: 1
+    spatial: false       # must stay in the home region (latency)
+    profile: user        # arrival follows user activity
+  photo:
+    label: "Photo/video backup AI indexing"
+    share: 0.30
+    window_h: 24
+    duration_h: 1
+    spatial: true
+    profile: night       # uploads while phones charge on Wi-Fi
+  ota:
+    label: "OTA firmware build and delta packaging"
+    share: 0.10
+    window_h: 12
+    duration_h: 2
+    spatial: true
+    profile: flat
+  train:
+    label: "On-device AI model retraining"
+    share: 0.25
+    window_h: 48
+    duration_h: 6
+    spatial: true
+    profile: flat
+
+# Stylised hourly arrival profiles in local time (CET), hours 0..23, normalised in code (ASSUMPTION).
+profiles:
+  user:  [0.35,0.25,0.2,0.2,0.2,0.3,0.55,0.8,0.95,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.05,1.15,1.3,1.4,1.4,1.25,0.9,0.6]
+  night: [1.6,1.7,1.7,1.6,1.4,1.1,0.8,0.6,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.6,0.7,0.8,0.9,1.0,1.2,1.4,1.5]
+  flat:  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+
+sensitivity:
+  window_scale: [0.0, 0.25, 0.5, 1.0, 2.0, 3.0]   # multiplies every deferrable window
+  headroom_factor: [0.25, 0.5, 1.1, 1.5, 3.0, 100.0]
+  migration_overhead: [0.0, 0.05, 0.10, 0.20]
+  emission_factor_set: [min, med, max]
+  pue_scenario: [published, all_1.09, all_1.54]
+  arrival_profile: [as_configured, all_flat]
